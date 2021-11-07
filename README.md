@@ -1,4 +1,3 @@
-About
 Engineer, Learner, Developer
 
 Interests 
