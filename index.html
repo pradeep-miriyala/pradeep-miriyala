@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mahabharata: Path of the Warrior</title>
     
-    <!-- React & ReactDOM -->
+    <!-- React & ReactDOM (via CDN) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Babel (for JSX) -->
+    <!-- Babel for JSX compilation in browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- Tailwind CSS -->
@@ -20,9 +20,37 @@
             background-color: #0f172a;
             color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
+            overflow: hidden; /* Prevent scrolling */
             touch-action: manipulation;
             user-select: none;
+        }
+        
+        /* Game Specific Global Styles */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-30px); }
+        }
+        .damage-text {
+            position: absolute;
+            color: #ef4444;
+            font-weight: bold;
+            font-size: 1.2rem;
+            animation: floatUp 0.8s ease-out forwards;
+            pointer-events: none;
+            z-index: 50;
+            text-shadow: 2px 2px 0 #000;
+        }
+        .game-canvas {
+            image-rendering: pixelated;
+        }
+        .badge-shine {
+            background: linear-gradient(45deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 60%);
+            background-size: 200% 200%;
+            animation: shine 3s infinite;
+        }
+        @keyframes shine {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
     </style>
 </head>
@@ -78,37 +106,8 @@
             { name: 'Mahabali', icon: '🐲', baseHp: 350, baseDmg: 40, baseDef: 15, xp: 300, speed: 4, color: '#dc2626' }
         ];
 
-        // --- Styles ---
-        const globalStyles = `
-            @keyframes floatUp {
-                0% { opacity: 1; transform: translateY(0); }
-                100% { opacity: 0; transform: translateY(-30px); }
-            }
-            .damage-text {
-                position: absolute;
-                color: #ef4444;
-                font-weight: bold;
-                font-size: 1.2rem;
-                animation: floatUp 0.8s ease-out forwards;
-                pointer-events: none;
-                z-index: 50;
-                text-shadow: 2px 2px 0 #000;
-            }
-            .game-canvas {
-                image-rendering: pixelated;
-            }
-            .badge-shine {
-                background: linear-gradient(45deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 60%);
-                background-size: 200% 200%;
-                animation: shine 3s infinite;
-            }
-            @keyframes shine {
-                0% { background-position: 200% 0; }
-                100% { background-position: -200% 0; }
-            }
-        `;
+        // --- Components ---
 
-        // --- Game Canvas Component ---
         const BattleCanvas = ({ 
             heroData, 
             level, 
@@ -122,6 +121,7 @@
             const canvasRef = useRef(null);
             const requestRef = useRef();
             
+            // Game State Refs
             const gameState = useRef({
                 hero: { x: 50, y: 200, w: 40, h: 40, dy: 0, cooldown: 0 },
                 enemies: [],
@@ -187,20 +187,16 @@
                 state.lastTime = time;
 
                 // 1. Update State
-                
-                // Hero Movement
                 const speed = 5;
                 if (state.keys.ArrowUp && state.hero.y > 50) state.hero.y -= speed;
                 if (state.keys.ArrowDown && state.hero.y < canvas.height - 60) state.hero.y += speed;
                 if (state.keys.ArrowLeft && state.hero.x > 0) state.hero.x -= speed;
                 if (state.keys.ArrowRight && state.hero.x < canvas.width / 2) state.hero.x += speed;
 
-                // Hero Attack
                 if (state.hero.cooldown > 0) state.hero.cooldown--;
                 if (state.keys.Space && state.hero.cooldown <= 0) {
                     state.shotsFired++;
                     const currentStage = heroData.stages.slice().reverse().find(s => level >= s.minLvl) || heroData.stages[0];
-                    
                     state.projectiles.push({
                         x: state.hero.x + 30,
                         y: state.hero.y + 10,
@@ -209,19 +205,17 @@
                         emoji: currentStage.projectile,
                         rotation: currentStage.rotation,
                         speed: heroData.projectileSpeed,
-                        trail: [] // For visual effect
+                        trail: [] 
                     });
                     state.hero.cooldown = heroData.attackRate;
                 }
 
-                // Enemy Spawning
                 state.spawnTimer++;
                 const spawnRate = Math.max(30, 150 - (level * 10)); 
                 if (state.spawnTimer > spawnRate) {
                     const availableEnemies = ENEMIES.filter((_, idx) => idx * 2 <= level + 2);
                     const template = availableEnemies[Math.floor(Math.random() * availableEnemies.length)];
-                    const scale = 1 + (level * 0.15); // Slightly harder scaling
-                    
+                    const scale = 1 + (level * 0.15);
                     state.enemies.push({
                         x: canvas.width + 50,
                         y: 50 + Math.random() * (canvas.height - 100),
@@ -231,38 +225,31 @@
                         hp: template.baseHp * scale,
                         maxHp: template.baseHp * scale,
                         dmg: template.baseDmg * scale,
-                        def: (template.baseDef || 0) + Math.floor(level * 1.5) // Scaling Defense
+                        def: (template.baseDef || 0) + Math.floor(level * 1.5)
                     });
                     state.spawnTimer = 0;
                 }
 
-                // Update Projectiles
                 for (let i = state.projectiles.length - 1; i >= 0; i--) {
                     const p = state.projectiles[i];
-                    
-                    // Add trail point
                     if (p.trail) {
                         p.trail.push({x: p.x, y: p.y, opacity: 0.6});
                         if (p.trail.length > 5) p.trail.shift();
                     }
-
                     p.x += p.speed;
                     if (p.x > canvas.width) state.projectiles.splice(i, 1);
                 }
 
-                // Update Enemies
                 for (let i = state.enemies.length - 1; i >= 0; i--) {
                     const e = state.enemies[i];
                     e.x -= e.speed;
 
-                    // Collision: Enemy hits Hero
                     if (
                         e.x < state.hero.x + state.hero.w &&
                         e.x + e.w > state.hero.x &&
                         e.y < state.hero.y + state.hero.h &&
                         e.y + e.h > state.hero.y
                     ) {
-                        // Calculate Hero Damage taken (Armor Mitigation)
                         const rawDmg = e.dmg;
                         const mitigation = Math.min(rawDmg * 0.8, stats.def || 0);
                         const actualDmg = Math.max(1, Math.floor(rawDmg - mitigation));
@@ -273,7 +260,6 @@
                             return { ...prev, hp: newHp };
                         });
                         
-                        // Knockback enemy
                         e.x += 60; 
                         state.particles.push({x: state.hero.x, y: state.hero.y, life: 10, color: 'rgba(255,0,0,0.5)', r: 30});
                     }
@@ -281,7 +267,6 @@
                     if (e.x < -50) state.enemies.splice(i, 1);
                 }
 
-                // Collision: Projectile hits Enemy
                 state.projectiles.forEach((p, pIdx) => {
                     state.enemies.forEach((e, eIdx) => {
                         if (
@@ -293,15 +278,12 @@
                             state.projectiles.splice(pIdx, 1);
                             state.shotsHit++;
                             
-                            // Damage Calculation with Enemy Armor
-                            const rawDmg = Math.floor(stats.str * (Math.random() > 0.8 ? 2 : 1)); // Crit
-                            const mitigation = Math.min(rawDmg * 0.9, e.def); // Armor can block up to 90%
+                            const rawDmg = Math.floor(stats.str * (Math.random() > 0.8 ? 2 : 1));
+                            const mitigation = Math.min(rawDmg * 0.9, e.def); 
                             const actualDmg = Math.max(1, Math.floor(rawDmg - mitigation));
-                            
                             e.hp -= actualDmg;
                             
-                            const isBlocked = mitigation > rawDmg * 0.5; // Visual for heavy armor block
-                            
+                            const isBlocked = mitigation > rawDmg * 0.5;
                             state.particles.push({
                                 x: e.x, y: e.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, 
                                 life: 20, color: isBlocked ? 'gray' : 'orange', text: actualDmg 
@@ -329,7 +311,6 @@
                     });
                 });
 
-                // Update Particles
                 for (let i = state.particles.length - 1; i >= 0; i--) {
                     const p = state.particles[i];
                     p.life--;
@@ -350,7 +331,6 @@
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0,0, canvas.width, canvas.height);
 
-                // Distant Mountains
                 ctx.fillStyle = "#334155";
                 ctx.beginPath();
                 ctx.moveTo(0, canvas.height);
@@ -360,7 +340,6 @@
                 ctx.lineTo(canvas.width, canvas.height);
                 ctx.fill();
 
-                // Ground
                 ctx.fillStyle = "#3f2c22";
                 ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
                 ctx.fillStyle = "#14532d";
@@ -369,26 +348,21 @@
                     ctx.fillRect(i + canvas.width, canvas.height - 45, 30, 10);
                 }
 
-                // Draw Hero
                 const stage = heroData.stages.slice().reverse().find(s => level >= s.minLvl) || heroData.stages[0];
                 ctx.font = "40px Arial";
                 ctx.fillText(stage.icon, state.hero.x, state.hero.y + 35);
                 
-                // Armor Indicator (Hero)
                 if (stats.def > 10) {
                     ctx.font = "16px Arial";
                     ctx.fillText("🛡️", state.hero.x - 15, state.hero.y + 10);
                 }
 
-                // Hero HP Bar
                 ctx.fillStyle = "red";
                 ctx.fillRect(state.hero.x, state.hero.y - 10, 40, 5);
                 ctx.fillStyle = "#4ade80";
                 ctx.fillRect(state.hero.x, state.hero.y - 10, 40 * (Math.max(0, stats.hp) / stats.maxHp), 5);
 
-                // Draw Projectiles
                 state.projectiles.forEach(p => {
-                    // Draw trail
                     if (p.trail) {
                         p.trail.forEach((t, i) => {
                             ctx.fillStyle = `rgba(255, 255, 255, ${i * 0.1})`;
@@ -397,35 +371,27 @@
                             ctx.fill();
                         });
                     }
-
-                    // Draw Projectile with Rotation
                     ctx.save();
-                    ctx.translate(p.x + 10, p.y + 10); // Translate to center of projectile
+                    ctx.translate(p.x + 10, p.y + 10); 
                     ctx.rotate((p.rotation || 0) * Math.PI / 180);
                     ctx.font = "20px Arial";
-                    ctx.fillText(p.emoji, -10, 5); // Draw centered
+                    ctx.fillText(p.emoji, -10, 5); 
                     ctx.restore();
                 });
 
-                // Draw Enemies
                 state.enemies.forEach(e => {
                     ctx.font = "40px Arial";
                     ctx.fillText(e.icon, e.x, e.y + 35);
-                    
-                    // Armor Indicator (Enemy)
                     if (e.def > 5) {
                         ctx.font = "14px Arial";
                         ctx.fillText("🛡️", e.x - 10, e.y + 10);
                     }
-
-                    // HP Bar
                     ctx.fillStyle = "red";
                     ctx.fillRect(e.x, e.y - 10, 40, 5);
                     ctx.fillStyle = e.color;
                     ctx.fillRect(e.x, e.y - 10, 40 * (Math.max(0, e.hp) / e.maxHp), 5);
                 });
 
-                // Draw Particles
                 state.particles.forEach(p => {
                     if (p.text) {
                         ctx.fillStyle = p.color || "yellow";
@@ -463,69 +429,39 @@
                         height={400} 
                         className="w-full h-full object-cover bg-gray-900 game-canvas rounded-lg shadow-2xl border border-gray-700"
                     />
-                    {/* Mobile controls */}
                     <div className="absolute bottom-4 left-4 grid grid-cols-3 gap-1 opacity-60 md:hidden">
                         <div></div>
-                        <button 
-                            className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl"
-                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('up', true); }}
-                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('up', false); }}
-                        >▲</button>
+                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('up', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('up', false); }}>▲</button>
                         <div></div>
-                        <button 
-                            className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl"
-                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('left', true); }}
-                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('left', false); }}
-                        >◀</button>
+                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('left', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('left', false); }}>◀</button>
                         <div className="w-12 h-12"></div>
-                        <button 
-                            className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl"
-                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('right', true); }}
-                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('right', false); }}
-                        >▶</button>
+                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('right', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('right', false); }}>▶</button>
                         <div></div>
-                        <button 
-                            className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl"
-                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('down', true); }}
-                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('down', false); }}
-                        >▼</button>
+                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('down', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('down', false); }}>▼</button>
                         <div></div>
                     </div>
-
-                    <button 
-                        className="absolute bottom-8 right-8 w-20 h-20 bg-red-600 rounded-full border-4 border-red-800 text-white font-bold text-lg shadow-lg opacity-80 active:scale-95 transition-transform md:hidden"
-                        onTouchStart={(e) => { e.preventDefault(); handleMobileInput('shoot', true); }}
-                        onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('shoot', false); }}
-                    >
-                        ATTACK
-                    </button>
+                    <button className="absolute bottom-8 right-8 w-20 h-20 bg-red-600 rounded-full border-4 border-red-800 text-white font-bold text-lg shadow-lg opacity-80 active:scale-95 transition-transform md:hidden" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('shoot', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('shoot', false); }}>ATTACK</button>
                 </div>
             );
         };
 
-        // --- Badge Component ---
         const AchievementBadge = ({ hero, level, stars, score, date }) => {
             return (
                 <div className="relative w-64 h-80 bg-gray-800 border-4 border-yellow-500 rounded-xl p-4 flex flex-col items-center justify-between shadow-2xl overflow-hidden badge-shine transform transition hover:scale-105">
                     <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-yellow-600/20 to-transparent"></div>
-                    
                     <div className="text-yellow-400 font-serif text-sm tracking-widest uppercase mt-2">Warrior's Honor</div>
-                    
                     <div className="relative z-10 w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center border-2 border-yellow-600 shadow-inner">
                         <span className="text-6xl">{hero?.stages?.[level >= 10 ? 2 : level >= 5 ? 1 : 0]?.icon || '🛡️'}</span>
                     </div>
-
                     <div className="text-center z-10">
                         <h3 className="text-xl font-bold text-white mb-1">{hero?.name || 'Unknown'}</h3>
                         <p className="text-yellow-500 font-bold text-lg">Level {level} Master</p>
                     </div>
-
                     <div className="flex gap-1 text-2xl z-10">
                         {[...Array(3)].map((_, i) => (
                             <span key={i} className={i < stars ? "text-yellow-400 drop-shadow-md" : "text-gray-600"}>★</span>
                         ))}
                     </div>
-
                     <div className="w-full flex justify-between text-xs text-gray-400 border-t border-gray-600 pt-2 z-10">
                         <span>Score: {score}</span>
                         <span>{new Date(date).toLocaleDateString()}</span>
@@ -534,22 +470,15 @@
             );
         };
 
-        // --- Main App Component ---
         const App = () => {
-            // Game State
             const [view, setView] = useState('MENU');
             const [hero, setHero] = useState(null); 
             const [playerStats, setPlayerStats] = useState(null);
             const [level, setLevel] = useState(1);
-            
-            // Scoring & Stats
             const [currentRunStats, setCurrentRunStats] = useState(null);
             const [leaderboard, setLeaderboard] = useState([]);
-
-            // UI State
             const [battleLog, setBattleLog] = useState([]);
 
-            // Load Leaderboard on mount
             useEffect(() => {
                 const saved = localStorage.getItem('mahabharata_leaderboard');
                 if (saved) setLeaderboard(JSON.parse(saved));
@@ -594,7 +523,6 @@
                 };
 
                 setCurrentRunStats(newEntry);
-                
                 const newLeaderboard = [...leaderboard, newEntry].sort((a, b) => b.score - a.score).slice(0, 10);
                 setLeaderboard(newLeaderboard);
                 localStorage.setItem('mahabharata_leaderboard', JSON.stringify(newLeaderboard));
@@ -629,33 +557,16 @@
                 setLevel(1);
             };
 
-            // --- Renders ---
-
             return (
                 <div className="min-h-screen bg-gray-900 text-white font-sans overflow-hidden select-none">
-                    <style>{globalStyles}</style>
-
-                    {/* Screens */}
                     {view === 'MENU' && (
                         <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 p-6 text-center relative overflow-hidden">
                             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]"></div>
-                            
                             <h1 className="text-5xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-600 mb-2 tracking-tighter z-10 filter drop-shadow-lg">MAHABHARATA</h1>
                             <h2 className="text-2xl text-orange-400 mb-8 font-serif z-10">Path of the Warrior</h2>
-                            
                             <div className="flex flex-col gap-4 z-10 w-full max-w-xs">
-                                <button 
-                                    onClick={() => setView('SELECT')}
-                                    className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 px-8 rounded-lg text-xl shadow-2xl transform transition hover:scale-105 border border-yellow-400"
-                                >
-                                    Enter Battle
-                                </button>
-                                <button 
-                                    onClick={() => setView('LEADERBOARD')}
-                                    className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg text-lg border border-gray-600"
-                                >
-                                    Leaderboard
-                                </button>
+                                <button onClick={() => setView('SELECT')} className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 px-8 rounded-lg text-xl shadow-2xl transform transition hover:scale-105 border border-yellow-400">Enter Battle</button>
+                                <button onClick={() => setView('LEADERBOARD')} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg text-lg border border-gray-600">Leaderboard</button>
                             </div>
                         </div>
                     )}
@@ -703,15 +614,10 @@
                                 {Object.keys(CHARACTERS).map(key => {
                                     const char = CHARACTERS[key];
                                     return (
-                                        <div 
-                                            key={char.id} 
-                                            className="flex-1 bg-gray-800 border-2 border-gray-700 rounded-xl p-6 cursor-pointer hover:border-yellow-500 hover:bg-gray-750 transition-all transform hover:-translate-y-2"
-                                            onClick={() => startGame(key)}
-                                        >
+                                        <div key={char.id} className="flex-1 bg-gray-800 border-2 border-gray-700 rounded-xl p-6 cursor-pointer hover:border-yellow-500 hover:bg-gray-750 transition-all transform hover:-translate-y-2" onClick={() => startGame(key)}>
                                             <div className="text-8xl mb-6 text-center animate-bounce-slow">{char.stages[2].icon}</div>
                                             <h3 className={`text-3xl font-bold text-center mb-2 ${char.color}`}>{char.name}</h3>
                                             <p className="text-gray-400 text-center mb-6">{char.desc}</p>
-                                            
                                             <div className="space-y-2">
                                                 <div className="flex justify-between text-sm text-gray-500 bg-gray-900 p-2 rounded">
                                                     <span>Strength</span>
@@ -736,20 +642,13 @@
 
                     {view === 'BATTLE' && hero && (
                         <div className="h-screen w-full flex flex-col bg-gray-900 relative">
-                            {/* HUD */}
                             <div className="bg-gray-800 p-2 flex justify-between items-center border-b border-gray-700 z-10 shadow-md">
                                 <div className="flex items-center gap-3">
                                     <button onClick={goHome} className="text-gray-400 hover:text-white text-xs border border-gray-600 px-2 py-1 rounded">🏠 Home</button>
                                     <span className="text-yellow-500 font-bold text-xl ml-2">Lvl {level}</span>
-                                    <span className="bg-gray-700 px-2 py-1 rounded text-sm text-gray-300">
-                                        {hero.stages.slice().reverse().find(s => level >= s.minLvl)?.title}
-                                    </span>
+                                    <span className="bg-gray-700 px-2 py-1 rounded text-sm text-gray-300">{hero.stages.slice().reverse().find(s => level >= s.minLvl)?.title}</span>
                                 </div>
-                                
-                                <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block text-gray-500 text-xs">
-                                    ARROWS: Move | SPACE: Attack
-                                </div>
-
+                                <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block text-gray-500 text-xs">ARROWS: Move | SPACE: Attack</div>
                                 <div className="flex items-center gap-4">
                                     <div className="w-40 flex flex-col items-end">
                                         <div className="text-xs text-gray-400 mb-1">{playerStats.hp} / {playerStats.maxHp} HP</div>
@@ -759,26 +658,11 @@
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Game Canvas Area */}
                             <div className="flex-1 overflow-hidden relative">
-                                <BattleCanvas 
-                                    heroData={hero}
-                                    level={level}
-                                    stats={playerStats}
-                                    setStats={setPlayerStats}
-                                    onVictory={handleVictory}
-                                    onGameOver={handleGameOver}
-                                    setBattleLog={setBattleLog}
-                                    isPaused={false}
-                                />
-                                
-                                {/* Battle Log Overlay */}
+                                <BattleCanvas heroData={hero} level={level} stats={playerStats} setStats={setPlayerStats} onVictory={handleVictory} onGameOver={handleGameOver} setBattleLog={setBattleLog} isPaused={false} />
                                 <div className="absolute top-4 left-4 w-64 h-32 pointer-events-none overflow-hidden flex flex-col justify-end">
                                     {battleLog.slice(-5).map((log, i) => (
-                                        <div key={i} className={`text-sm shadow-black drop-shadow-md font-bold ${log.type === 'good' ? 'text-green-400' : 'text-white'}`}>
-                                            {log.msg}
-                                        </div>
+                                        <div key={i} className={`text-sm shadow-black drop-shadow-md font-bold ${log.type === 'good' ? 'text-green-400' : 'text-white'}`}>{log.msg}</div>
                                     ))}
                                 </div>
                             </div>
@@ -790,39 +674,15 @@
                             <div className="absolute inset-0 bg-gradient-to-b from-green-900/20 to-gray-900"></div>
                             <div className="text-8xl mb-4 animate-bounce">🕉️</div>
                             <h2 className="text-5xl font-extrabold text-yellow-500 mb-2 filter drop-shadow-lg">VICTORY!</h2>
-                            
-                            {/* Achievement Badge */}
                             <div className="my-6 z-10">
-                                <AchievementBadge 
-                                    hero={hero} 
-                                    level={currentRunStats.level} 
-                                    stars={currentRunStats.stars} 
-                                    score={currentRunStats.score}
-                                    date={currentRunStats.date}
-                                />
+                                <AchievementBadge hero={hero} level={currentRunStats.level} stars={currentRunStats.stars} score={currentRunStats.score} date={currentRunStats.date} />
                             </div>
-                            
                             <div className="flex flex-col gap-3 w-full max-w-sm z-10">
                                 <div className="flex gap-2">
-                                     <button 
-                                        onClick={replayLevel}
-                                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500"
-                                    >
-                                        ↺ Replay
-                                    </button>
-                                    <button 
-                                        onClick={goHome}
-                                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500"
-                                    >
-                                        🏠 Menu
-                                    </button>
+                                     <button onClick={replayLevel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500">↺ Replay</button>
+                                    <button onClick={goHome} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500">🏠 Menu</button>
                                 </div>
-                                <button 
-                                    onClick={nextLevel}
-                                    className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg text-xl shadow-lg transform transition hover:scale-105"
-                                >
-                                    Start Level {level + 1}
-                                </button>
+                                <button onClick={nextLevel} className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg text-xl shadow-lg transform transition hover:scale-105">Start Level {level + 1}</button>
                             </div>
                         </div>
                     )}
@@ -832,20 +692,9 @@
                             <div className="text-8xl mb-6 text-red-600 animate-pulse">💀</div>
                             <h2 className="text-5xl font-bold text-red-500 mb-2">DEFEATED</h2>
                             <p className="text-gray-400 mb-8 text-xl">Your journey ends here... for now.</p>
-                            
                             <div className="flex flex-col gap-3 w-full max-w-sm">
-                                <button 
-                                    onClick={replayLevel}
-                                    className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-12 rounded-lg text-lg"
-                                >
-                                    Try Again
-                                </button>
-                                <button 
-                                    onClick={goHome}
-                                    className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-12 rounded-lg text-lg border border-gray-600"
-                                >
-                                    Return to Menu
-                                </button>
+                                <button onClick={replayLevel} className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-12 rounded-lg text-lg">Try Again</button>
+                                <button onClick={goHome} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-12 rounded-lg text-lg border border-gray-600">Return to Menu</button>
                             </div>
                         </div>
                     )}
