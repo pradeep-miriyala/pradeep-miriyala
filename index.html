@@ -4,185 +4,552 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mahabharata: Path of the Warrior</title>
-    
-    <!-- React & ReactDOM (via CDN) -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <!-- Babel for JSX compilation in browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
-        body {
-            background-color: #0f172a;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden; /* Prevent scrolling */
-            touch-action: manipulation;
-            user-select: none;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@400;700&display=swap');
         
-        /* Game Specific Global Styles */
-        @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-30px); }
-        }
-        .damage-text {
-            position: absolute;
-            color: #ef4444;
-            font-weight: bold;
-            font-size: 1.2rem;
-            animation: floatUp 0.8s ease-out forwards;
-            pointer-events: none;
-            z-index: 50;
-            text-shadow: 2px 2px 0 #000;
-        }
-        .game-canvas {
-            image-rendering: pixelated;
-        }
-        .badge-shine {
-            background: linear-gradient(45deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 60%);
-            background-size: 200% 200%;
-            animation: shine 3s infinite;
-        }
-        @keyframes shine {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-
-        /* Mobile Optimization Styles */
-        .touch-control {
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #111827; /* gray-900 */
+            overflow: hidden;
+            touch-action: none;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none;
+        }
+
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Landscape enforcement */
+        #orientation-lock {
+            display: none;
+        }
+        @media (orientation: portrait) {
+            #orientation-lock {
+                display: flex;
+            }
+            #app-root {
+                display: none;
+            }
+        }
+
+        /* Custom scrollbar for leaderboard */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+
+        /* Animations */
+        @keyframes shine {
+            0% { background-position: -100px; }
+            40%, 100% { background-position: 200px; }
+        }
+        .card-shine {
+            background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            animation: shine 3s infinite linear;
+        }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+        .animate-pulse-ring {
+            animation: pulse-ring 1s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
     </style>
 </head>
 <body>
+    <div id="orientation-lock" class="fixed inset-0 z-50 bg-black text-white flex-col items-center justify-center p-4 text-center">
+        <div class="text-6xl mb-4">🔄</div>
+        <h2 class="text-2xl font-bold font-cinzel text-yellow-500">Rotate Device</h2>
+        <p class="mt-2 text-gray-400">Please rotate your device to landscape mode to play.</p>
+    </div>
+
     <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+    <script type="text/babel" data-presets="env,react">
+        const { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } = React;
 
-        // --- Game Data ---
+        // --- Constants & Types ---
+        const GAME_WIDTH = 1280;
+        const GAME_HEIGHT = 720;
+        const GRAVITY = 0.5;
+        const GROUND_Y = GAME_HEIGHT - 100;
 
-        const CHARACTERS = {
+        const HEROES = {
             BHIMA: {
-                id: 'bhima',
                 name: 'Bhima',
-                desc: 'The Mighty. High Health, High Armor.',
-                color: 'text-orange-500',
-                bg: 'bg-orange-600',
-                projectileSpeed: 9,
-                attackRate: 35, 
-                stages: [
-                    { minLvl: 1, title: 'Child Bhima', icon: '👶', weapon: '🪨', projectile: '🪨', rotation: 0 },
-                    { minLvl: 5, title: 'Student Bhima', icon: '👦', weapon: '👊', projectile: '👊', rotation: 0 },
-                    { minLvl: 10, title: 'Warrior Bhima', icon: '🦁', weapon: 'Gada', projectile: '🔨', rotation: 45 }
-                ],
-                baseStats: { hp: 150, str: 20, agi: 4, def: 5 }, 
-                growth: { hp: 30, str: 5, agi: 1, def: 2 }
+                baseHp: 200,
+                baseDef: 8,
+                speed: 5,
+                attackSpeed: 45, 
+                projectileType: 'ROCK',
+                color: '#ef4444', 
+                emojis: ['🧔‍♂️', '🐘', '🌪️'],
+                description: 'Tank. Rage grows when hitting or hit. Special: Earth Shatter.',
+                specialName: 'Earth Shatter',
+                resourceType: 'RAGE',
+                maxResource: 100,
+                resourceColor: 'bg-red-600',
+                specialCost: 60
             },
             ARJUNA: {
-                id: 'arjuna',
                 name: 'Arjuna',
-                desc: 'The Archer. Fast Attacks, Penetrating Shots.',
-                color: 'text-blue-400',
-                bg: 'bg-blue-600',
-                projectileSpeed: 18,
-                attackRate: 18,
-                stages: [
-                    { minLvl: 1, title: 'Child Arjuna', icon: '🧒', weapon: 'Toy Bow', projectile: '🥢', rotation: -45 },
-                    { minLvl: 5, title: 'Student Arjuna', icon: '🧑', weapon: 'Slingshot', projectile: '🥎', rotation: 0 },
-                    { minLvl: 10, title: 'Warrior Arjuna', icon: '🏹', weapon: 'Gandiva', projectile: '➢', rotation: 0 }
-                ],
-                baseStats: { hp: 100, str: 10, agi: 8, def: 2 },
-                growth: { hp: 15, str: 3, agi: 2, def: 1 }
+                baseHp: 120,
+                baseDef: 3,
+                speed: 9,
+                attackSpeed: 25,
+                projectileType: 'ARROW',
+                color: '#3b82f6', 
+                emojis: ['👦', '🏹', '✨'],
+                description: 'Speed & Crit. Focus regens over time. Special: Astral Volley.',
+                specialName: 'Astral Volley',
+                resourceType: 'FOCUS',
+                maxResource: 100,
+                resourceColor: 'bg-blue-500',
+                specialCost: 40
             }
         };
 
         const ENEMIES = [
-            { name: 'Forest Imp', icon: '👺', baseHp: 30, baseDmg: 5, baseDef: 0, xp: 20, speed: 2, color: '#4ade80' },
-            { name: 'Wild Boar', icon: '🐗', baseHp: 50, baseDmg: 10, baseDef: 2, xp: 30, speed: 3, color: '#a16207' },
-            { name: 'Rakshasa', icon: '👹', baseHp: 90, baseDmg: 15, baseDef: 5, xp: 50, speed: 2.5, color: '#ef4444' },
-            { name: 'Asura', icon: '👿', baseHp: 130, baseDmg: 20, baseDef: 8, xp: 80, speed: 3.5, color: '#7e22ce' },
-            { name: 'Sorcerer', icon: '🧙‍♂️', baseHp: 110, baseDmg: 25, baseDef: 4, xp: 100, speed: 2, color: '#3b82f6' },
-            { name: 'Mahabali', icon: '🐲', baseHp: 350, baseDmg: 40, baseDef: 15, xp: 300, speed: 4, color: '#dc2626' }
+            { type: 'IMP', hp: 20, damage: 5, speed: 3, score: 10, emoji: '👺', scale: 40 },
+            { type: 'DEMON', hp: 50, damage: 12, speed: 2, score: 30, emoji: '👹', scale: 60 },
+            { type: 'KING', hp: 250, damage: 30, speed: 1.5, score: 100, emoji: '👿', scale: 100 },
+            { type: 'ASURA', hp: 100, damage: 15, speed: 4, score: 50, emoji: '🧟', scale: 50 }
         ];
 
-        // --- Helper Functions ---
-        const toggleFullScreen = () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-                });
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
+        // --- Sound Manager (Web Audio API) ---
+        const SoundManager = {
+            ctx: null,
+            init: () => {
+                if (!SoundManager.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) SoundManager.ctx = new AudioContext();
+                }
+            },
+            play: (type) => {
+                if (!SoundManager.ctx) return;
+                if (SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
+                
+                const t = SoundManager.ctx.currentTime;
+                const osc = SoundManager.ctx.createOscillator();
+                const gain = SoundManager.ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(SoundManager.ctx.destination);
+
+                switch (type) {
+                    case 'ATTACK_BHIMA': // Heavy low thud
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(120, t);
+                        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+                        gain.gain.setValueAtTime(0.3, t);
+                        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                        osc.start(t);
+                        osc.stop(t + 0.2);
+                        break;
+                    case 'ATTACK_ARJUNA': // Fast zip
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(600, t);
+                        osc.frequency.linearRampToValueAtTime(300, t + 0.1);
+                        gain.gain.setValueAtTime(0.15, t);
+                        gain.gain.linearRampToValueAtTime(0.01, t + 0.1);
+                        osc.start(t);
+                        osc.stop(t + 0.1);
+                        break;
+                    case 'HIT': // Generic Impact
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(100, t);
+                        osc.frequency.exponentialRampToValueAtTime(10, t + 0.1);
+                        gain.gain.setValueAtTime(0.1, t);
+                        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                        osc.start(t);
+                        osc.stop(t + 0.1);
+                        break;
+                    case 'IMPACT': // Projectile hitting enemy (sharper)
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(200, t);
+                        osc.frequency.exponentialRampToValueAtTime(50, t + 0.05);
+                        gain.gain.setValueAtTime(0.1, t);
+                        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+                        osc.start(t);
+                        osc.stop(t + 0.1);
+                        break;
+                    case 'SPECIAL': // Power up / Unleash
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(100, t);
+                        osc.frequency.linearRampToValueAtTime(800, t + 0.5);
+                        gain.gain.setValueAtTime(0.3, t);
+                        gain.gain.linearRampToValueAtTime(0, t + 0.5);
+                        osc.start(t);
+                        osc.stop(t + 0.5);
+                        break;
+                    case 'SPAWN': // Low drone warning
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(50, t);
+                        osc.frequency.linearRampToValueAtTime(80, t + 0.3);
+                        gain.gain.setValueAtTime(0.05, t);
+                        gain.gain.linearRampToValueAtTime(0, t + 0.3);
+                        osc.start(t);
+                        osc.stop(t + 0.3);
+                        break;
+                    case 'LEVELUP': // Major Arpeggio
+                        [440, 554, 659, 880, 1108].forEach((freq, i) => {
+                            const o = SoundManager.ctx.createOscillator();
+                            const g = SoundManager.ctx.createGain();
+                            o.connect(g);
+                            g.connect(SoundManager.ctx.destination);
+                            o.type = 'sine';
+                            o.frequency.value = freq;
+                            g.gain.setValueAtTime(0, t + i*0.08);
+                            g.gain.linearRampToValueAtTime(0.1, t + i*0.08 + 0.05);
+                            g.gain.exponentialRampToValueAtTime(0.01, t + i*0.08 + 0.5);
+                            o.start(t + i*0.08);
+                            o.stop(t + i*0.08 + 0.6);
+                        });
+                        break;
                 }
             }
         };
 
+        // --- Game Logic ---
+
+        const App = () => {
+            const [phase, setPhase] = useState('MENU'); // MENU, GAME, VICTORY, GAMEOVER
+            const [selectedHero, setSelectedHero] = useState('BHIMA');
+            const [hudState, setHudState] = useState({ 
+                hp: 100, maxHp: 100, level: 1, score: 0, wave: 1, 
+                resource: 0, maxResource: 100, resourceType: 'RAGE',
+                exp: 0, nextExp: 100
+            });
+            const [highScores, setHighScores] = useState([]);
+            
+            useEffect(() => {
+                const savedScores = localStorage.getItem('mahabharata_scores');
+                if (savedScores) {
+                    setHighScores(JSON.parse(savedScores));
+                }
+                
+                const initAudio = () => SoundManager.init();
+                window.addEventListener('click', initAudio, { once: true });
+                window.addEventListener('touchstart', initAudio, { once: true });
+                window.addEventListener('keydown', initAudio, { once: true });
+                return () => {
+                    window.removeEventListener('click', initAudio);
+                    window.removeEventListener('touchstart', initAudio);
+                    window.removeEventListener('keydown', initAudio);
+                };
+            }, []);
+
+            const saveScore = (score, hero) => {
+                const newScores = [...highScores, { score, hero, date: new Date().toLocaleDateString() }]
+                    .sort((a, b) => b.score - a.score)
+                    .slice(10);
+                setHighScores(newScores);
+                localStorage.setItem('mahabharata_scores', JSON.stringify(newScores));
+            };
+
+            const toggleFullscreen = () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(e => console.log(e));
+                } else if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            };
+
+            return (
+                <div className="w-full h-screen bg-gray-900 overflow-hidden relative select-none">
+                    {phase === 'MENU' && (
+                        <MenuScreen 
+                            onStart={() => { SoundManager.init(); setPhase('GAME'); }} 
+                            selectedHero={selectedHero} 
+                            setSelectedHero={setSelectedHero}
+                            highScores={highScores}
+                            toggleFullscreen={toggleFullscreen}
+                        />
+                    )}
+
+                    {phase === 'GAME' && (
+                        <GameCanvas 
+                            heroType={selectedHero}
+                            onGameOver={(score) => {
+                                saveScore(score, selectedHero);
+                                setPhase('GAMEOVER');
+                            }}
+                            onVictory={(score) => {
+                                saveScore(score, selectedHero);
+                                setPhase('VICTORY');
+                            }}
+                            setHudState={setHudState}
+                            onExit={() => setPhase('MENU')}
+                        />
+                    )}
+
+                    {phase === 'GAME' && (
+                        <HUD 
+                            state={hudState} 
+                            heroType={selectedHero} 
+                            onExit={() => setPhase('MENU')}
+                        />
+                    )}
+
+                    {(phase === 'VICTORY' || phase === 'GAMEOVER') && (
+                        <EndScreen 
+                            phase={phase} 
+                            score={hudState.score} 
+                            hero={selectedHero} 
+                            onRestart={() => setPhase('MENU')} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
         // --- Components ---
 
-        const BattleCanvas = ({ 
-            heroData, 
-            level, 
-            stats, 
-            setStats, 
-            onVictory, 
-            onGameOver, 
-            setBattleLog,
-            isPaused
-        }) => {
+        const MenuScreen = ({ onStart, selectedHero, setSelectedHero, highScores, toggleFullscreen }) => {
+            const heroData = HEROES[selectedHero];
+
+            return (
+                <div className="absolute inset-0 overflow-y-auto flex flex-col items-center justify-start md:justify-center bg-[url('https://images.unsplash.com/photo-1599592186847-f25b12852656?q=80&w=1920')] bg-cover bg-center">
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm -z-10"></div>
+                    
+                    <div className="z-10 text-center w-full p-4 flex flex-col md:flex-row gap-8 items-center justify-center min-h-screen md:min-h-0">
+                        {/* Left: Hero Selection */}
+                        <div className="flex-1 flex flex-col items-center space-y-4 md:space-y-6 max-w-lg w-full pt-10 md:pt-0">
+                            <div>
+                                <h1 className="text-3xl md:text-6xl font-bold font-cinzel text-yellow-500 mb-1 md:mb-2 tracking-wider shadow-black drop-shadow-lg">
+                                    MAHABHARATA
+                                </h1>
+                                <p className="text-sm md:text-xl text-gray-300 font-cinzel mb-4 md:mb-8">Path of the Warrior</p>
+                            </div>
+                            
+                            <div className="flex gap-4 mb-2">
+                                {Object.keys(HEROES).map(key => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setSelectedHero(key)}
+                                        className={`px-4 py-2 md:px-6 md:py-3 rounded-lg font-bold border-2 transition-all transform hover:scale-105 text-sm md:text-base ${
+                                            selectedHero === key 
+                                            ? 'bg-yellow-600 border-yellow-400 text-white shadow-[0_0_20px_rgba(234,179,8,0.5)]' 
+                                            : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        {key}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="bg-gray-800/80 p-4 md:p-6 rounded-xl border border-gray-600 w-full max-w-md card-shine">
+                                <div className="text-4xl md:text-6xl mb-2 md:mb-4 animate-bounce">{heroData.emojis[0]}</div>
+                                <h2 className="text-xl md:text-2xl font-bold text-yellow-400 mb-1">{heroData.name}</h2>
+                                <p className="text-gray-300 text-xs md:text-sm mb-3">{heroData.description}</p>
+                                <div className="grid grid-cols-2 gap-2 text-xs md:text-sm">
+                                    <div className="flex justify-between"><span>HP:</span> <span className="text-green-400">{'|'.repeat(heroData.baseHp/20)}</span></div>
+                                    <div className="flex justify-between"><span>SPD:</span> <span className="text-blue-400">{'|'.repeat(heroData.speed)}</span></div>
+                                    <div className="flex justify-between"><span>DEF:</span> <span className="text-gray-400">{'|'.repeat(heroData.baseDef)}</span></div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-gray-700 text-[10px] md:text-xs">
+                                    <span className="text-yellow-200 font-bold">SPECIAL: {heroData.specialName}</span>
+                                    <div className="text-gray-400 mt-1">Cost: {heroData.specialCost} {heroData.resourceType}</div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 w-full max-w-md pb-10 md:pb-0">
+                                <button 
+                                    onClick={onStart}
+                                    className="w-full px-8 py-3 md:py-4 bg-red-600 hover:bg-red-500 text-white text-lg md:text-xl font-bold rounded-full shadow-[0_0_30px_rgba(220,38,38,0.6)] transform transition hover:scale-105 active:scale-95"
+                                >
+                                    ENTER BATTLE
+                                </button>
+                                <button onClick={toggleFullscreen} className="text-xs md:text-sm text-gray-400 underline p-2">
+                                    Toggle Fullscreen
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Right: Leaderboard (Hidden on small mobile landscape) */}
+                        <div className="hidden md:block w-80 bg-gray-900/90 rounded-lg border border-gray-700 p-4 h-96 overflow-hidden flex flex-col">
+                            <h3 className="text-xl font-cinzel text-yellow-500 border-b border-gray-700 pb-2 mb-2 text-center">Hall of Heroes</h3>
+                            <div className="overflow-y-auto flex-1 space-y-2">
+                                {highScores.length === 0 ? (
+                                    <div className="text-gray-500 text-center mt-10">No Legends Yet</div>
+                                ) : (
+                                    highScores.map((s, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm p-2 bg-gray-800/50 rounded">
+                                            <span className="text-yellow-500 w-6">#{i+1}</span>
+                                            <span className="flex-1 text-gray-300 text-left pl-2">{s.hero}</span>
+                                            <span className="font-mono font-bold text-white">{s.score}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const HUD = ({ state, heroType, onExit }) => {
+            const heroConfig = HEROES[heroType];
+            const hpPercent = Math.max(0, (state.hp / state.maxHp) * 100);
+            const resPercent = Math.max(0, (state.resource / state.maxResource) * 100);
+            const expPercent = Math.max(0, (state.exp / state.nextExp) * 100);
+            
+            return (
+                <div className="absolute top-0 left-0 w-full p-2 md:p-4 flex justify-between items-start pointer-events-none z-20">
+                    <div className="flex flex-col gap-1 md:gap-2 w-56 md:w-72">
+                        {/* HP Bar */}
+                        <div className="w-full h-5 md:h-6 bg-gray-900 border-2 border-gray-600 rounded-full relative overflow-hidden">
+                            <div 
+                                className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all duration-300 ease-out"
+                                style={{ width: `${hpPercent}%` }}
+                            ></div>
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-bold text-white drop-shadow-md">
+                                {state.hp} / {state.maxHp} HP
+                            </span>
+                        </div>
+                        
+                        {/* XP Bar */}
+                        <div className="w-full h-1.5 bg-gray-900 rounded-full relative overflow-hidden">
+                             <div 
+                                className="h-full bg-yellow-400 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(250,204,21,0.8)]"
+                                style={{ width: `${expPercent}%` }}
+                            ></div>
+                        </div>
+
+                        {/* Resource Bar */}
+                        <div className="w-3/4 h-3 md:h-4 bg-gray-900 border border-gray-600 rounded-full relative overflow-hidden shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+                             <div 
+                                className={`h-full ${heroConfig.resourceColor} transition-all duration-300 ease-out`}
+                                style={{ width: `${resPercent}%` }}
+                            ></div>
+                             <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white drop-shadow-md">
+                                {Math.floor(state.resource)} {state.resourceType}
+                            </span>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <span className="bg-blue-900/80 px-2 py-1 rounded text-xs text-blue-200 border border-blue-500 font-bold">
+                                LVL {state.level}
+                            </span>
+                             <span className="bg-purple-900/80 px-2 py-1 rounded text-xs text-purple-200 border border-purple-500 font-bold">
+                                WAVE {state.wave}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-4">
+                        <div className="text-right">
+                            <div className="text-2xl md:text-3xl font-cinzel text-yellow-400 drop-shadow-lg font-bold">
+                                {state.score.toLocaleString()}
+                            </div>
+                            <div className="text-[10px] md:text-xs text-gray-400 uppercase tracking-widest">Score</div>
+                        </div>
+                        <button 
+                            onClick={onExit}
+                            className="pointer-events-auto bg-red-900/80 hover:bg-red-700 text-red-100 px-3 py-1 rounded border border-red-500 text-xs font-bold transition-colors"
+                        >
+                            HOME
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const EndScreen = ({ phase, score, hero, onRestart }) => {
+            const isVictory = phase === 'VICTORY';
+            return (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
+                    <div className={`text-center p-8 rounded-2xl border-4 max-w-lg w-full transform transition-all scale-100 ${isVictory ? 'border-yellow-500 bg-yellow-900/20' : 'border-red-800 bg-red-900/20'}`}>
+                        <div className="text-8xl mb-6 animate-pulse">
+                            {isVictory ? '👑' : '💀'}
+                        </div>
+                        <h2 className={`text-5xl font-cinzel font-bold mb-2 ${isVictory ? 'text-yellow-400' : 'text-red-500'}`}>
+                            {isVictory ? 'VICTORY' : 'DEFEATED'}
+                        </h2>
+                        <p className="text-gray-300 mb-8 font-cinzel">
+                            {isVictory ? 'The demons have been vanquished.' : 'Your journey ends here, warrior.'}
+                        </p>
+                        
+                        <div className="bg-gray-800/50 p-6 rounded-lg mb-8 border border-gray-700">
+                            <p className="text-gray-400 uppercase text-xs tracking-widest mb-1">Final Score</p>
+                            <p className="text-4xl font-mono font-bold text-white">{score.toLocaleString()}</p>
+                            <p className="text-sm text-gray-500 mt-2">Hero: <span className="text-gray-300">{HEROES[hero].name}</span></p>
+                        </div>
+
+                        <button 
+                            onClick={onRestart}
+                            className={`px-10 py-3 rounded-full font-bold text-xl transition-transform hover:scale-105 ${isVictory ? 'bg-yellow-600 hover:bg-yellow-500 text-black' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                        >
+                            {isVictory ? 'Play Again' : 'Menu'}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Game Engine Wrapper ---
+
+        const GameCanvas = ({ heroType, onGameOver, onVictory, setHudState, onExit }) => {
             const canvasRef = useRef(null);
             const requestRef = useRef();
+            const inputRef = useRef({ left: false, right: false, up: false, down: false, attack: false, special: false });
             
-            // Game State Refs
-            const gameState = useRef({
-                hero: { x: 50, y: 200, w: 40, h: 40, dy: 0, cooldown: 0 },
+            // Game State Ref (Mutable for performance)
+            const gameRef = useRef({
+                hero: null,
                 enemies: [],
                 projectiles: [],
                 particles: [],
-                bgOffset: 0,
+                texts: [],
+                effects: [], // Shockwaves etc
                 score: 0,
-                shotsFired: 0,
-                shotsHit: 0,
-                startTime: Date.now(),
-                keys: { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false },
+                wave: 1,
+                lastTime: 0,
                 spawnTimer: 0,
-                lastTime: 0
+                gameTime: 0,
+                cameraX: 0,
+                specialCooldown: 0
             });
 
-            useEffect(() => {
-                gameState.current.startTime = Date.now();
-                gameState.current.shotsFired = 0;
-                gameState.current.shotsHit = 0;
-                gameState.current.score = 0;
-                gameState.current.enemies = [];
-                gameState.current.projectiles = [];
-                gameState.current.particles = [];
-                gameState.current.hero.x = 50;
-                gameState.current.hero.y = 200;
-            }, [level]);
-
+            // Input Handlers
             useEffect(() => {
                 const handleKeyDown = (e) => {
-                    if (e.code === 'Space') gameState.current.keys.Space = true;
-                    if (e.code === 'ArrowUp') gameState.current.keys.ArrowUp = true;
-                    if (e.code === 'ArrowDown') gameState.current.keys.ArrowDown = true;
-                    if (e.code === 'ArrowLeft') gameState.current.keys.ArrowLeft = true;
-                    if (e.code === 'ArrowRight') gameState.current.keys.ArrowRight = true;
+                    if (e.code === 'ArrowLeft') inputRef.current.left = true;
+                    if (e.code === 'ArrowRight') inputRef.current.right = true;
+                    if (e.code === 'ArrowUp') inputRef.current.up = true;
+                    if (e.code === 'ArrowDown') inputRef.current.down = true;
+                    if (e.code === 'Space') inputRef.current.attack = true;
+                    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'z' || e.key === 'Z') inputRef.current.special = true;
+                    if (e.code === 'Escape') onExit();
                 };
                 const handleKeyUp = (e) => {
-                    if (e.code === 'Space') gameState.current.keys.Space = false;
-                    if (e.code === 'ArrowUp') gameState.current.keys.ArrowUp = false;
-                    if (e.code === 'ArrowDown') gameState.current.keys.ArrowDown = false;
-                    if (e.code === 'ArrowLeft') gameState.current.keys.ArrowLeft = false;
-                    if (e.code === 'ArrowRight') gameState.current.keys.ArrowRight = false;
+                    if (e.code === 'ArrowLeft') inputRef.current.left = false;
+                    if (e.code === 'ArrowRight') inputRef.current.right = false;
+                    if (e.code === 'ArrowUp') inputRef.current.up = false;
+                    if (e.code === 'ArrowDown') inputRef.current.down = false;
+                    if (e.code === 'Space') inputRef.current.attack = false;
+                    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'z' || e.key === 'Z') inputRef.current.special = false;
                 };
                 window.addEventListener('keydown', handleKeyDown);
                 window.addEventListener('keyup', handleKeyUp);
@@ -190,586 +557,557 @@
                     window.removeEventListener('keydown', handleKeyDown);
                     window.removeEventListener('keyup', handleKeyUp);
                 };
-            }, []);
+            }, [onExit]);
 
-            const animate = (time) => {
-                if (isPaused) {
-                    requestRef.current = requestAnimationFrame(animate);
-                    return;
+            // Initialization
+            useEffect(() => {
+                const heroConfig = HEROES[heroType];
+                gameRef.current = {
+                    ...gameRef.current,
+                    hero: {
+                        x: 100,
+                        y: GROUND_Y,
+                        vx: 0,
+                        vy: 0,
+                        hp: heroConfig.baseHp,
+                        maxHp: heroConfig.baseHp,
+                        level: 1,
+                        exp: 0,
+                        attackCooldown: 0,
+                        config: heroConfig,
+                        resource: heroType === 'ARJUNA' ? 50 : 0 // Arjuna starts with some Focus
+                    },
+                    enemies: [],
+                    projectiles: [],
+                    particles: [],
+                    texts: [],
+                    effects: [],
+                    score: 0,
+                    wave: 1,
+                    lastTime: performance.now(),
+                    specialCooldown: 0
+                };
+            }, [heroType]);
+
+            // Helper: Create Particle
+            const spawnParticles = (x, y, color, count = 5, type = 'CIRCLE') => {
+                for (let i = 0; i < count; i++) {
+                    gameRef.current.particles.push({
+                        x, y,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10,
+                        life: 1.0,
+                        color,
+                        type
+                    });
                 }
+            };
 
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-                const ctx = canvas.getContext('2d');
-                const state = gameState.current;
-                
-                const deltaTime = time - state.lastTime;
+            // Helper: Floating Text
+            const showDamage = (x, y, amount, isCrit = false) => {
+                gameRef.current.texts.push({
+                    x, y,
+                    text: amount.toString(),
+                    life: 1.0,
+                    color: isCrit ? '#fbbf24' : '#ffffff',
+                    scale: isCrit ? 40 : 20,
+                    vy: -2
+                });
+            };
+
+            // Main Loop
+            const update = useCallback((time) => {
+                const state = gameRef.current;
+                const dt = Math.min((time - state.lastTime) / 16.67, 2); // Cap dt
                 state.lastTime = time;
+                state.gameTime += dt;
 
-                // 1. Update State
-                const speed = 5;
-                if (state.keys.ArrowUp && state.hero.y > 50) state.hero.y -= speed;
-                if (state.keys.ArrowDown && state.hero.y < canvas.height - 60) state.hero.y += speed;
-                if (state.keys.ArrowLeft && state.hero.x > 0) state.hero.x -= speed;
-                if (state.keys.ArrowRight && state.hero.x < canvas.width / 2) state.hero.x += speed;
+                const ctx = canvasRef.current.getContext('2d');
+                const { hero } = state;
+                const { config } = hero;
+                const nextLevelExp = 50 * hero.level; // Reduced XP curve
 
-                if (state.hero.cooldown > 0) state.hero.cooldown--;
-                if (state.keys.Space && state.hero.cooldown <= 0) {
-                    state.shotsFired++;
-                    const currentStage = heroData.stages.slice().reverse().find(s => level >= s.minLvl) || heroData.stages[0];
-                    state.projectiles.push({
-                        x: state.hero.x + 30,
-                        y: state.hero.y + 10,
-                        w: 20,
-                        h: 20,
-                        emoji: currentStage.projectile,
-                        rotation: currentStage.rotation,
-                        speed: heroData.projectileSpeed,
-                        trail: [] 
-                    });
-                    state.hero.cooldown = heroData.attackRate;
+                // --- UPDATE ---
+
+                // Resource Regeneration (Arjuna Focus - Passive)
+                if (config.name === 'ARJUNA') {
+                    hero.resource = Math.min(config.maxResource, hero.resource + 0.2 * dt); // 12 resource/sec roughly
                 }
 
-                state.spawnTimer++;
-                const spawnRate = Math.max(30, 150 - (level * 10)); 
-                if (state.spawnTimer > spawnRate) {
-                    const availableEnemies = ENEMIES.filter((_, idx) => idx * 2 <= level + 2);
-                    const template = availableEnemies[Math.floor(Math.random() * availableEnemies.length)];
-                    const scale = 1 + (level * 0.15);
-                    state.enemies.push({
-                        x: canvas.width + 50,
-                        y: 50 + Math.random() * (canvas.height - 100),
-                        w: 40,
-                        h: 40,
-                        ...template,
-                        hp: template.baseHp * scale,
-                        maxHp: template.baseHp * scale,
-                        dmg: template.baseDmg * scale,
-                        def: (template.baseDef || 0) + Math.floor(level * 1.5)
-                    });
-                    state.spawnTimer = 0;
-                }
+                // Hero Movement
+                const input = inputRef.current;
+                if (input.left) hero.vx = -config.speed;
+                else if (input.right) hero.vx = config.speed;
+                else hero.vx = 0;
 
-                for (let i = state.projectiles.length - 1; i >= 0; i--) {
-                    const p = state.projectiles[i];
-                    if (p.trail) {
-                        p.trail.push({x: p.x, y: p.y, opacity: 0.6});
-                        if (p.trail.length > 5) p.trail.shift();
+                if (input.up) hero.vy = -config.speed * 0.7; 
+                else if (input.down) hero.vy = config.speed * 0.7;
+                else hero.vy = 0;
+
+                hero.x += hero.vx * dt;
+                hero.y += hero.vy * dt;
+
+                // Boundaries
+                hero.x = Math.max(50, Math.min(hero.x, GAME_WIDTH - 50));
+                hero.y = Math.max(GAME_HEIGHT/2, Math.min(hero.y, GAME_HEIGHT - 50));
+                
+                // Hero Attack
+                if (hero.attackCooldown > 0) hero.attackCooldown -= dt;
+                if (input.attack && hero.attackCooldown <= 0) {
+                    hero.attackCooldown = config.attackSpeed - (hero.level * 2);
+                    SoundManager.play(`ATTACK_${config.name.toUpperCase()}`);
+                    
+                    const pConfig = {
+                        x: hero.x + 30, 
+                        y: hero.y - 10,
+                        vx: 15, // Strict Right Direction
+                        vy: 0,
+                        life: 80,
+                        damage: 10 + (hero.level * 2),
+                        rotation: 0,
+                        type: config.projectileType,
+                        owner: 'HERO'
+                    };
+
+                    if (config.projectileType === 'ROCK') {
+                        pConfig.vy = -4; // Slight Arc
                     }
-                    p.x += p.speed;
-                    if (p.x > canvas.width) state.projectiles.splice(i, 1);
-                }
-
-                for (let i = state.enemies.length - 1; i >= 0; i--) {
-                    const e = state.enemies[i];
-                    e.x -= e.speed;
-
-                    if (
-                        e.x < state.hero.x + state.hero.w &&
-                        e.x + e.w > state.hero.x &&
-                        e.y < state.hero.y + state.hero.h &&
-                        e.y + e.h > state.hero.y
-                    ) {
-                        const rawDmg = e.dmg;
-                        const mitigation = Math.min(rawDmg * 0.8, stats.def || 0);
-                        const actualDmg = Math.max(1, Math.floor(rawDmg - mitigation));
-
-                        setStats(prev => {
-                            const newHp = Math.max(0, prev.hp - actualDmg); 
-                            if (newHp <= 0) onGameOver();
-                            return { ...prev, hp: newHp };
-                        });
-                        
-                        e.x += 60; 
-                        state.particles.push({x: state.hero.x, y: state.hero.y, life: 10, color: 'rgba(255,0,0,0.5)', r: 30});
+                    
+                    state.projectiles.push(pConfig);
+                    
+                    // Bhima builds Rage on swing (Aggressive)
+                    if (config.name === 'BHIMA') {
+                        hero.resource = Math.min(config.maxResource, hero.resource + 3);
                     }
-
-                    if (e.x < -50) state.enemies.splice(i, 1);
                 }
 
-                state.projectiles.forEach((p, pIdx) => {
-                    state.enemies.forEach((e, eIdx) => {
-                        if (
-                            p.x < e.x + e.w &&
-                            p.x + p.w > e.x &&
-                            p.y < e.y + e.h &&
-                            p.y + p.h > e.y
-                        ) {
-                            state.projectiles.splice(pIdx, 1);
-                            state.shotsHit++;
-                            
-                            const rawDmg = Math.floor(stats.str * (Math.random() > 0.8 ? 2 : 1));
-                            const mitigation = Math.min(rawDmg * 0.9, e.def); 
-                            const actualDmg = Math.max(1, Math.floor(rawDmg - mitigation));
-                            e.hp -= actualDmg;
-                            
-                            const isBlocked = mitigation > rawDmg * 0.5;
-                            state.particles.push({
-                                x: e.x, y: e.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, 
-                                life: 20, color: isBlocked ? 'gray' : 'orange', text: actualDmg 
+                // Special Ability Logic
+                if (state.specialCooldown > 0) state.specialCooldown -= dt;
+                if (input.special && state.specialCooldown <= 0) {
+                    if (hero.resource >= config.specialCost) {
+                        // Activate Special
+                        hero.resource -= config.specialCost;
+                        state.specialCooldown = 60; 
+                        SoundManager.play('SPECIAL');
+
+                        if (config.name === 'BHIMA') {
+                            // EARTH SHATTER: Big Shockwave, Knockback, Stun
+                            state.effects.push({
+                                type: 'SHOCKWAVE',
+                                x: hero.x + 50,
+                                y: hero.y,
+                                radius: 10,
+                                maxRadius: 300,
+                                alpha: 1,
+                                color: '#a16207'
                             });
-
-                            if (e.hp <= 0) {
-                                state.enemies.splice(eIdx, 1);
-                                state.score += e.xp;
-                                setBattleLog(prev => [...prev.slice(-4), { msg: `Defeated ${e.name} (+${e.xp} XP)`, type: 'good' }]);
-                                
-                                const xpNeeded = 100 + (level * 50); 
-                                if (state.score >= xpNeeded) {
-                                    const timeTaken = Date.now() - state.startTime;
-                                    const accuracy = state.shotsFired > 0 ? (state.shotsHit / state.shotsFired) : 0;
-                                    onVictory({
-                                        score: state.score,
-                                        time: timeTaken,
-                                        accuracy: accuracy,
-                                        shotsFired: state.shotsFired,
-                                        shotsHit: state.shotsHit
-                                    });
+                            
+                            // Logic hit
+                            state.enemies.forEach(e => {
+                                const dist = Math.abs(e.x - hero.x);
+                                if (dist < 400 && e.x > hero.x) {
+                                    e.hp -= 50 + (hero.level * 10);
+                                    e.x += 250; // Massive Knockback
+                                    e.frozen = 60; // Stun 1s
+                                    showDamage(e.x, e.y, "SMASH!", true);
+                                    spawnParticles(e.x, e.y, '#a16207', 10);
                                 }
+                            });
+                            // Shake
+                            state.screenShake = 20;
+                        } else if (config.name === 'ARJUNA') {
+                            // ASTRAL VOLLEY: Rapid Fire Homing-ish arrows
+                            for(let i=0; i<7; i++) {
+                                setTimeout(() => {
+                                    state.projectiles.push({
+                                        x: hero.x + 30,
+                                        y: hero.y - 40 + (Math.random()*40),
+                                        vx: 25, // Very fast
+                                        vy: (Math.random() - 0.5) * 2,
+                                        life: 100,
+                                        damage: 20 + (hero.level * 3),
+                                        rotation: 0,
+                                        type: 'ARROW',
+                                        owner: 'HERO',
+                                        isSpecial: true,
+                                        piercing: true // Arrows go through enemies
+                                    });
+                                    SoundManager.play('ATTACK_ARJUNA'); // Pew pew pew
+                                }, i * 50); // Staggered launch
+                            }
+                        }
+                    }
+                }
+
+                // Spawning Enemies
+                state.spawnTimer += dt;
+                const spawnRate = Math.max(40, 180 - (state.wave * 10)); 
+                if (state.spawnTimer > spawnRate) {
+                    state.spawnTimer = 0;
+                    SoundManager.play('SPAWN');
+                    const enemyPool = ENEMIES.filter((_, i) => i <= Math.min(ENEMIES.length-1, Math.floor(state.wave / 2)));
+                    const chosen = enemyPool[Math.floor(Math.random() * enemyPool.length)];
+
+                    state.enemies.push({
+                        ...chosen,
+                        x: GAME_WIDTH + 100,
+                        y: (GAME_HEIGHT/2) + Math.random() * (GAME_HEIGHT/2 - 50),
+                        maxHp: chosen.hp + (state.wave * 10),
+                        hp: chosen.hp + (state.wave * 10),
+                        frozen: 0
+                    });
+                }
+
+                // Update Projectiles
+                state.projectiles.forEach(p => {
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    if (p.type === 'ROCK') p.vy += 0.2 * dt; // Gravity
+                    p.rotation = Math.atan2(p.vy, p.vx);
+                    p.life -= dt;
+                    if (p.isSpecial) spawnParticles(p.x, p.y, '#60a5fa', 1);
+                });
+                state.projectiles = state.projectiles.filter(p => p.life > 0 && p.x > -100 && p.x < GAME_WIDTH + 100 && p.y < GAME_HEIGHT);
+
+                // Update Enemies
+                state.enemies.forEach(e => {
+                    if (e.frozen > 0) {
+                        e.frozen -= dt;
+                        return;
+                    }
+                    e.x -= e.speed * dt;
+                });
+
+                // Collisions: Projectile vs Enemy
+                state.projectiles.forEach(p => {
+                    if (p.owner !== 'HERO') return;
+                    // Filter out dead projectiles already processed if not piercing
+                    if (p.dead) return;
+
+                    state.enemies.forEach(e => {
+                        if (p.dead && !p.piercing) return;
+                        
+                        const dx = p.x - e.x;
+                        const dy = p.y - e.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist < (e.scale/2 + 20)) {
+                            // Hit
+                            SoundManager.play('IMPACT');
+                            const isCrit = config.name === 'Arjuna' && Math.random() < 0.35;
+                            const dmg = isCrit ? p.damage * 2 : p.damage;
+                            e.hp -= dmg;
+                            
+                            if (!p.piercing) p.dead = true; // Mark for deletion
+
+                            showDamage(e.x, e.y - 50, Math.floor(dmg), isCrit);
+                            spawnParticles(e.x, e.y, '#ef4444', 5);
+                            
+                            // Knockback small enemies
+                            if (e.type === 'IMP') e.x += 10;
+
+                            // Resource gain on hit (Bhima)
+                             if (config.name === 'BHIMA') {
+                                hero.resource = Math.min(config.maxResource, hero.resource + 5);
                             }
                         }
                     });
                 });
+                state.projectiles = state.projectiles.filter(p => !p.dead);
 
-                for (let i = state.particles.length - 1; i >= 0; i--) {
-                    const p = state.particles[i];
-                    p.life--;
-                    if (p.vx) p.x += p.vx;
-                    if (p.vy) p.y += p.vy;
-                    if (p.life <= 0) state.particles.splice(i, 1);
+                // Collisions: Enemy vs Player
+                state.enemies.forEach(e => {
+                    const dx = e.x - hero.x;
+                    const dy = e.y - hero.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 50) { // Contact damage
+                         const def = config.baseDef + hero.level;
+                         const dmg = Math.max(1, e.damage - def);
+                         
+                         hero.hp -= dmg * 0.1 * dt; 
+                         if (Math.random() < 0.1) {
+                             spawnParticles(hero.x, hero.y, '#ffffff', 2);
+                             SoundManager.play('HIT');
+                             if(config.name === 'BHIMA') hero.resource = Math.min(config.maxResource, hero.resource + 5); // Rage on hit
+                         }
+                    }
+                });
+
+                // Death Logic
+                if (hero.hp <= 0) {
+                    onGameOver(Math.floor(state.score));
+                    return; 
                 }
 
-                // 2. Draw Everything
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Cleanup Enemies & XP
+                const initialCount = state.enemies.length;
+                state.enemies = state.enemies.filter(e => {
+                    if (e.hp <= 0) {
+                        state.score += e.score;
+                        hero.exp += 20;
+                        spawnParticles(e.x, e.y, '#fbbf24', 15);
+                        return false;
+                    }
+                    if (e.x < -100) return false; 
+                    return true;
+                });
+                
+                if (initialCount > state.enemies.length) {
+                    // Level Up Check
+                    if (hero.exp >= nextLevelExp) {
+                        hero.exp -= nextLevelExp;
+                        hero.level++;
+                        hero.hp = Math.min(hero.hp + 50, config.baseHp + (hero.level * 20));
+                        hero.maxHp = config.baseHp + (hero.level * 20);
+                        showDamage(hero.x, hero.y - 80, "LEVEL UP!", true);
+                        SoundManager.play('LEVELUP');
+                    }
+                    // Wave Logic - Faster waves
+                    const waveThreshold = state.wave * 250; // Reduced from 500
+                    if (state.score > waveThreshold && state.score - (initialCount - state.enemies.length) * 10 <= waveThreshold) {
+                         // Just crossed threshold? (Logic slightly fuzzy here due to score jumps, checking simple condition)
+                         // We use a persistent flag in a real engine, here we just check if we are high enough and it feels like a new wave
+                    }
+                }
+                // Wave progression check
+                const targetScore = state.wave * 250;
+                if (state.score > targetScore) {
+                     state.wave++;
+                     showDamage(GAME_WIDTH/2, GAME_HEIGHT/2, `WAVE ${state.wave}`, true);
+                }
+
+
+                // Update Particles
+                state.particles.forEach(p => {
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= 0.05 * dt;
+                });
+                state.particles = state.particles.filter(p => p.life > 0);
+
+                // Update Effects (Shockwaves)
+                state.effects.forEach(eff => {
+                    if (eff.type === 'SHOCKWAVE') {
+                        eff.radius += 15 * dt;
+                        eff.alpha -= 0.05 * dt;
+                    }
+                });
+                state.effects = state.effects.filter(eff => eff.alpha > 0);
+
+                // Update Text
+                state.texts.forEach(t => {
+                    t.y += t.vy * dt;
+                    t.life -= 0.02 * dt;
+                });
+                state.texts = state.texts.filter(t => t.life > 0);
+
+                setHudState({
+                    hp: Math.floor(hero.hp),
+                    maxHp: Math.floor(hero.maxHp),
+                    level: hero.level,
+                    score: Math.floor(state.score),
+                    wave: state.wave,
+                    resource: hero.resource,
+                    maxResource: config.maxResource,
+                    resourceType: config.resourceType,
+                    exp: hero.exp,
+                    nextExp: nextLevelExp
+                });
+
+                // --- RENDER ---
+                ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                
+                // Screen Shake
+                ctx.save();
+                if (state.screenShake > 0) {
+                    const shake = state.screenShake;
+                    ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+                    state.screenShake -= dt;
+                }
 
                 // Background
-                state.bgOffset -= 1;
-                if (state.bgOffset <= -canvas.width) state.bgOffset = 0;
-                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-                gradient.addColorStop(0, "#0f172a");
-                gradient.addColorStop(1, "#1e293b");
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = '#111827';
+                ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-                ctx.fillStyle = "#334155";
-                ctx.beginPath();
-                ctx.moveTo(0, canvas.height);
-                for(let i=0; i<=canvas.width; i+=50) {
-                    ctx.lineTo(i, canvas.height - 100 - Math.sin(i*0.01 + state.bgOffset*0.005)*50);
+                // Parallax Background
+                const scroll = state.gameTime * 2;
+                // Mountains
+                ctx.fillStyle = '#1f2937';
+                for(let i=0; i<10; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo((i*300) - (scroll*0.5 % 300), GAME_HEIGHT);
+                    ctx.lineTo((i*300) + 150 - (scroll*0.5 % 300), GAME_HEIGHT - 300);
+                    ctx.lineTo((i*300) + 300 - (scroll*0.5 % 300), GAME_HEIGHT);
+                    ctx.fill();
                 }
-                ctx.lineTo(canvas.width, canvas.height);
-                ctx.fill();
+                // Ground
+                ctx.fillStyle = '#374151';
+                ctx.fillRect(0, GROUND_Y + 50, GAME_WIDTH, 100);
 
-                ctx.fillStyle = "#3f2c22";
-                ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
-                ctx.fillStyle = "#14532d";
-                for(let i=state.bgOffset; i < canvas.width; i+=40) {
-                    if (i > -40) ctx.fillRect(i, canvas.height - 45, 30, 10);
-                    ctx.fillRect(i + canvas.width, canvas.height - 45, 30, 10);
-                }
-
-                const stage = heroData.stages.slice().reverse().find(s => level >= s.minLvl) || heroData.stages[0];
-                ctx.font = "40px Arial";
-                ctx.fillText(stage.icon, state.hero.x, state.hero.y + 35);
-                
-                if (stats.def > 10) {
-                    ctx.font = "16px Arial";
-                    ctx.fillText("🛡️", state.hero.x - 15, state.hero.y + 10);
-                }
-
-                ctx.fillStyle = "red";
-                ctx.fillRect(state.hero.x, state.hero.y - 10, 40, 5);
-                ctx.fillStyle = "#4ade80";
-                ctx.fillRect(state.hero.x, state.hero.y - 10, 40 * (Math.max(0, stats.hp) / stats.maxHp), 5);
-
-                state.projectiles.forEach(p => {
-                    if (p.trail) {
-                        p.trail.forEach((t, i) => {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${i * 0.1})`;
-                            ctx.beginPath();
-                            ctx.arc(t.x + 10, t.y + 10, 2 + i, 0, Math.PI*2);
-                            ctx.fill();
-                        });
+                // Draw Effects (Behind chars)
+                state.effects.forEach(eff => {
+                    if (eff.type === 'SHOCKWAVE') {
+                        ctx.beginPath();
+                        ctx.arc(eff.x, eff.y, eff.radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = eff.color;
+                        ctx.lineWidth = 5;
+                        ctx.globalAlpha = eff.alpha;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
                     }
+                });
+
+                // Draw Hero
+                // We REMOVED the horizontal flip. Hero always faces RIGHT.
+                const heroEmoji = config.emojis[Math.min(2, Math.floor((hero.level - 1) / 5))];
+                ctx.font = '80px Serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                ctx.save();
+                ctx.translate(hero.x, hero.y);
+                // Only tilt for movement speed impression
+                ctx.rotate(hero.vx * 0.02); 
+                ctx.fillText(heroEmoji, 0, 0);
+                
+                if (config.baseDef + hero.level > 10) {
+                    ctx.font = '30px Serif';
+                    ctx.fillText('🛡️', 30, -30);
+                }
+                ctx.restore();
+
+                // Draw Enemies
+                state.enemies.forEach(e => {
+                    ctx.font = `${e.scale}px Serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(e.emoji, e.x, e.y);
+                    
+                    // HP Bar
+                    const w = 50;
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(e.x - w/2, e.y - e.scale/2 - 10, w * (e.hp / e.maxHp), 5);
+                });
+
+                // Draw Projectiles
+                state.projectiles.forEach(p => {
                     ctx.save();
-                    ctx.translate(p.x + 10, p.y + 10); 
-                    ctx.rotate((p.rotation || 0) * Math.PI / 180);
-                    ctx.font = "20px Arial";
-                    ctx.fillText(p.emoji, -10, 5); 
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation);
+                    ctx.fillStyle = p.isSpecial ? '#60a5fa' : config.color;
+                    
+                    if (p.isSpecial && config.name === 'ARJUNA') {
+                        // Glowing Arrow
+                        ctx.shadowColor = '#3b82f6';
+                        ctx.shadowBlur = 10;
+                    }
+
+                    if (p.type === 'ROCK') {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 10, 0, Math.PI*2);
+                        ctx.fill();
+                    } else {
+                        // Arrow shape
+                        ctx.beginPath();
+                        ctx.moveTo(-10, -3);
+                        ctx.lineTo(10, 0);
+                        ctx.lineTo(-10, 3);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
                     ctx.restore();
                 });
 
-                state.enemies.forEach(e => {
-                    ctx.font = "40px Arial";
-                    ctx.fillText(e.icon, e.x, e.y + 35);
-                    if (e.def > 5) {
-                        ctx.font = "14px Arial";
-                        ctx.fillText("🛡️", e.x - 10, e.y + 10);
-                    }
-                    ctx.fillStyle = "red";
-                    ctx.fillRect(e.x, e.y - 10, 40, 5);
-                    ctx.fillStyle = e.color;
-                    ctx.fillRect(e.x, e.y - 10, 40 * (Math.max(0, e.hp) / e.maxHp), 5);
-                });
-
+                // Draw Particles
                 state.particles.forEach(p => {
-                    if (p.text) {
-                        ctx.fillStyle = p.color || "yellow";
-                        ctx.font = "bold 20px Arial";
-                        ctx.fillText(p.text, p.x, p.y);
-                    } else {
-                        ctx.fillStyle = p.color;
-                        ctx.beginPath();
-                        ctx.arc(p.x, p.y, p.r || 5, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
                 });
 
-                requestRef.current = requestAnimationFrame(animate);
-            };
+                // Draw Text
+                state.texts.forEach(t => {
+                    ctx.globalAlpha = t.life;
+                    ctx.font = `bold ${t.scale}px sans-serif`;
+                    ctx.fillStyle = t.color;
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.strokeText(t.text, t.x, t.y);
+                    ctx.fillText(t.text, t.x, t.y);
+                    ctx.globalAlpha = 1.0;
+                });
+                
+                ctx.restore(); // Restore shake state
 
-            useEffect(() => {
-                requestRef.current = requestAnimationFrame(animate);
-                return () => cancelAnimationFrame(requestRef.current);
-            }, [isPaused]); 
+                requestRef.current = requestAnimationFrame(() => update(performance.now()));
+            }, [heroType, onGameOver]);
 
-            const handleMobileInput = (action, active) => {
-                if (action === 'up') gameState.current.keys.ArrowUp = active;
-                if (action === 'down') gameState.current.keys.ArrowDown = active;
-                if (action === 'left') gameState.current.keys.ArrowLeft = active;
-                if (action === 'right') gameState.current.keys.ArrowRight = active;
-                if (action === 'shoot') gameState.current.keys.Space = active;
-            };
-
-            return (
-                <div className="relative w-full h-full flex items-center justify-center bg-gray-900 overflow-hidden">
-                    {/* Scalable Canvas Container */}
-                    <div className="relative w-full max-w-4xl aspect-[2/1] shadow-2xl border-2 border-gray-700 rounded-lg overflow-hidden">
-                        <canvas 
-                            ref={canvasRef} 
-                            width={800} 
-                            height={400} 
-                            className="w-full h-full object-contain game-canvas"
-                        />
-                        
-                        {/* Mobile Overlay Controls - Absolute to the screen viewport for easier thumb reach */}
-                        <div className="fixed bottom-6 left-6 grid grid-cols-3 gap-2 opacity-70 md:hidden z-50 touch-control">
-                            <div></div>
-                            <button 
-                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
-                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('up', true); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('up', false); }}
-                            >▲</button>
-                            <div></div>
-                            <button 
-                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
-                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('left', true); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('left', false); }}
-                            >◀</button>
-                            <div className="w-14 h-14"></div>
-                            <button 
-                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
-                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('right', true); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('right', false); }}
-                            >▶</button>
-                            <div></div>
-                            <button 
-                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
-                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('down', true); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('down', false); }}
-                            >▼</button>
-                            <div></div>
-                        </div>
-
-                        <button 
-                            className="fixed bottom-10 right-10 w-24 h-24 bg-red-600/80 rounded-full border-4 border-red-800/50 text-white font-bold text-lg shadow-lg opacity-80 active:scale-95 transition-transform md:hidden z-50 touch-control"
-                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('shoot', true); }}
-                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('shoot', false); }}
-                        >
-                            ATTACK
-                        </button>
-                    </div>
-                </div>
-            );
-        };
-
-        const AchievementBadge = ({ hero, level, stars, score, date }) => {
-            return (
-                <div className="relative w-64 h-80 bg-gray-800 border-4 border-yellow-500 rounded-xl p-4 flex flex-col items-center justify-between shadow-2xl overflow-hidden badge-shine transform transition hover:scale-105">
-                    <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-yellow-600/20 to-transparent"></div>
-                    <div className="text-yellow-400 font-serif text-sm tracking-widest uppercase mt-2">Warrior's Honor</div>
-                    <div className="relative z-10 w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center border-2 border-yellow-600 shadow-inner">
-                        <span className="text-6xl">{hero?.stages?.[level >= 10 ? 2 : level >= 5 ? 1 : 0]?.icon || '🛡️'}</span>
-                    </div>
-                    <div className="text-center z-10">
-                        <h3 className="text-xl font-bold text-white mb-1">{hero?.name || 'Unknown'}</h3>
-                        <p className="text-yellow-500 font-bold text-lg">Level {level} Master</p>
-                    </div>
-                    <div className="flex gap-1 text-2xl z-10">
-                        {[...Array(3)].map((_, i) => (
-                            <span key={i} className={i < stars ? "text-yellow-400 drop-shadow-md" : "text-gray-600"}>★</span>
-                        ))}
-                    </div>
-                    <div className="w-full flex justify-between text-xs text-gray-400 border-t border-gray-600 pt-2 z-10">
-                        <span>Score: {score}</span>
-                        <span>{new Date(date).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            const [view, setView] = useState('MENU');
-            const [hero, setHero] = useState(null); 
-            const [playerStats, setPlayerStats] = useState(null);
-            const [level, setLevel] = useState(1);
-            const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
-            const [currentRunStats, setCurrentRunStats] = useState(null);
-            const [leaderboard, setLeaderboard] = useState([]);
-            const [battleLog, setBattleLog] = useState([]);
-
-            useEffect(() => {
-                const saved = localStorage.getItem('mahabharata_leaderboard');
-                if (saved) setLeaderboard(JSON.parse(saved));
-
-                const checkOrientation = () => setIsPortrait(window.innerHeight > window.innerWidth);
-                window.addEventListener('resize', checkOrientation);
-                return () => window.removeEventListener('resize', checkOrientation);
-            }, []);
-
-            const calculateStats = (charId, lvl) => {
-                const char = CHARACTERS[charId === 'bhima' ? 'BHIMA' : 'ARJUNA'];
-                return {
-                    hp: char.baseStats.hp + (char.growth.hp * (lvl - 1)),
-                    maxHp: char.baseStats.hp + (char.growth.hp * (lvl - 1)),
-                    str: char.baseStats.str + (char.growth.str * (lvl - 1)),
-                    agi: char.baseStats.agi + (char.growth.agi * (lvl - 1)),
-                    def: char.baseStats.def + (char.growth.def * (lvl - 1))
+            useLayoutEffect(() => {
+                const resize = () => {
+                    const canvas = canvasRef.current;
+                    if(!canvas) return;
+                    const scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+                    canvas.style.width = `${GAME_WIDTH * scale}px`;
+                    canvas.style.height = `${GAME_HEIGHT * scale}px`;
                 };
-            };
+                window.addEventListener('resize', resize);
+                resize();
+                
+                requestRef.current = requestAnimationFrame(() => update(performance.now()));
 
-            const startGame = (charKey) => {
-                const char = CHARACTERS[charKey];
-                setHero(char);
-                const stats = calculateStats(char.id, 1);
-                setPlayerStats(stats);
-                setLevel(1);
-                setBattleLog([]);
-                setView('BATTLE');
-            };
+                return () => {
+                    window.removeEventListener('resize', resize);
+                    cancelAnimationFrame(requestRef.current);
+                }
+            }, [update]);
 
-            const handleVictory = (victoryData) => {
-                let stars = 1;
-                if (victoryData.accuracy > 0.5) stars++;
-                if (victoryData.accuracy > 0.75 && victoryData.time < 45000) stars++;
-                if (stars > 3) stars = 3;
-
-                const newEntry = {
-                    id: Date.now(),
-                    hero: hero.name,
-                    level: level,
-                    score: victoryData.score,
-                    stars: stars,
-                    accuracy: victoryData.accuracy,
-                    time: victoryData.time,
-                    date: new Date().toISOString()
-                };
-
-                setCurrentRunStats(newEntry);
-                const newLeaderboard = [...leaderboard, newEntry].sort((a, b) => b.score - a.score).slice(0, 10);
-                setLeaderboard(newLeaderboard);
-                localStorage.setItem('mahabharata_leaderboard', JSON.stringify(newLeaderboard));
-
-                setView('VICTORY');
-                setPlayerStats(prev => ({...prev, hp: prev.maxHp})); 
-            };
-
-            const handleGameOver = () => {
-                setView('GAMEOVER');
-            };
-
-            const nextLevel = () => {
-                const newLevel = level + 1;
-                setLevel(newLevel);
-                const newStats = calculateStats(hero.id, newLevel);
-                setPlayerStats(newStats);
-                setBattleLog([]);
-                setView('BATTLE');
-            };
-
-            const replayLevel = () => {
-                const stats = calculateStats(hero.id, level);
-                setPlayerStats(stats);
-                setBattleLog([]);
-                setView('BATTLE');
-            };
-
-            const goHome = () => {
-                setView('MENU');
-                setHero(null);
-                setLevel(1);
-            };
+            const handleTouchStart = (key) => (e) => { e.preventDefault(); inputRef.current[key] = true; };
+            const handleTouchEnd = (key) => (e) => { e.preventDefault(); inputRef.current[key] = false; };
 
             return (
-                <div className="min-h-screen bg-gray-900 text-white font-sans overflow-hidden select-none">
-                    
-                    {isPortrait && (
-                        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center text-center p-6 backdrop-blur-sm animate-fade-in">
-                            <div className="text-6xl mb-6 animate-pulse">📱🔄</div>
-                            <h2 className="text-2xl font-bold text-yellow-500 mb-2">Please Rotate Your Device</h2>
-                            <p className="text-gray-300 max-w-xs">The battlefield requires a wider view. Switch to Landscape mode for the best experience.</p>
-                        </div>
-                    )}
+                <div className="w-full h-full flex items-center justify-center bg-black relative">
+                    <canvas 
+                        ref={canvasRef} 
+                        width={GAME_WIDTH} 
+                        height={GAME_HEIGHT} 
+                        className="bg-gray-900 shadow-2xl"
+                    />
 
-                    {view === 'MENU' && (
-                        <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 p-6 text-center relative overflow-hidden">
-                            <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]"></div>
-                            <h1 className="text-5xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-600 mb-2 tracking-tighter z-10 filter drop-shadow-lg">MAHABHARATA</h1>
-                            <h2 className="text-2xl text-orange-400 mb-8 font-serif z-10">Path of the Warrior</h2>
-                            <div className="flex flex-col gap-4 z-10 w-full max-w-xs">
-                                <button onClick={() => setView('SELECT')} className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 px-8 rounded-lg text-xl shadow-2xl transform transition hover:scale-105 border border-yellow-400">Enter Battle</button>
-                                <button onClick={() => setView('LEADERBOARD')} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg text-lg border border-gray-600">Leaderboard</button>
-                                <button onClick={toggleFullScreen} className="text-sm text-gray-500 hover:text-gray-300 flex items-center justify-center gap-1 mt-2"><span>⛶</span> Go Fullscreen</button>
+                    {/* Mobile Controls Overlay */}
+                    <div className="absolute inset-0 pointer-events-none flex flex-col justify-end pb-8 px-8 md:hidden">
+                        <div className="flex justify-between items-end pointer-events-auto">
+                            {/* D-Pad */}
+                            <div className="relative w-40 h-40">
+                                <div className="absolute top-0 left-1/3 w-1/3 h-1/3 bg-white/20 rounded-t-lg active:bg-white/40"
+                                    onTouchStart={handleTouchStart('up')} onTouchEnd={handleTouchEnd('up')}></div>
+                                <div className="absolute bottom-0 left-1/3 w-1/3 h-1/3 bg-white/20 rounded-b-lg active:bg-white/40"
+                                    onTouchStart={handleTouchStart('down')} onTouchEnd={handleTouchEnd('down')}></div>
+                                <div className="absolute top-1/3 left-0 w-1/3 h-1/3 bg-white/20 rounded-l-lg active:bg-white/40"
+                                    onTouchStart={handleTouchStart('left')} onTouchEnd={handleTouchEnd('left')}></div>
+                                <div className="absolute top-1/3 right-0 w-1/3 h-1/3 bg-white/20 rounded-r-lg active:bg-white/40"
+                                    onTouchStart={handleTouchStart('right')} onTouchEnd={handleTouchEnd('right')}></div>
+                                <div className="absolute top-1/3 left-1/3 w-1/3 h-1/3 bg-black/50 rounded-full"></div>
                             </div>
-                        </div>
-                    )}
 
-                    {view === 'LEADERBOARD' && (
-                        <div className="h-screen w-full flex flex-col items-center bg-gray-900 p-6">
-                            <h2 className="text-3xl text-yellow-500 font-bold mb-6">Hall of Heroes</h2>
-                            <div className="w-full max-w-2xl bg-gray-800 rounded-lg p-4 shadow-xl overflow-y-auto max-h-[70vh]">
-                                <table className="w-full text-left">
-                                    <thead className="text-gray-400 border-b border-gray-700">
-                                        <tr>
-                                            <th className="p-3">Hero</th>
-                                            <th className="p-3">Lvl</th>
-                                            <th className="p-3">Score</th>
-                                            <th className="p-3">Rank</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {leaderboard.length === 0 ? (
-                                            <tr><td colSpan="4" className="p-4 text-center text-gray-500">No legends written yet.</td></tr>
-                                        ) : (
-                                            leaderboard.map((entry, i) => (
-                                                <tr key={i} className="border-b border-gray-700 hover:bg-gray-750">
-                                                    <td className="p-3 flex items-center gap-2">
-                                                        <span>{i===0?'👑':i===1?'🥈':i===2?'🥉':'•'}</span>
-                                                        {entry.hero}
-                                                    </td>
-                                                    <td className="p-3">{entry.level}</td>
-                                                    <td className="p-3 font-bold text-yellow-500">{entry.score}</td>
-                                                    <td className="p-3 text-yellow-400">{'★'.repeat(entry.stars)}</td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <button onClick={() => setView('MENU')} className="mt-8 text-gray-400 hover:text-white underline">Back to Menu</button>
-                        </div>
-                    )}
-
-                    {view === 'SELECT' && (
-                        <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 p-4">
-                            <h2 className="text-3xl text-white mb-6 font-bold">Choose Your Hero</h2>
-                            <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl">
-                                {Object.keys(CHARACTERS).map(key => {
-                                    const char = CHARACTERS[key];
-                                    return (
-                                        <div key={char.id} className="flex-1 bg-gray-800 border-2 border-gray-700 rounded-xl p-6 cursor-pointer hover:border-yellow-500 hover:bg-gray-750 transition-all transform hover:-translate-y-2" onClick={() => startGame(key)}>
-                                            <div className="text-8xl mb-6 text-center animate-bounce-slow">{char.stages[2].icon}</div>
-                                            <h3 className={`text-3xl font-bold text-center mb-2 ${char.color}`}>{char.name}</h3>
-                                            <p className="text-gray-400 text-center mb-6">{char.desc}</p>
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between text-sm text-gray-500 bg-gray-900 p-2 rounded">
-                                                    <span>Strength</span>
-                                                    <div className="w-24 h-4 bg-gray-700 rounded overflow-hidden">
-                                                        <div className="h-full bg-red-500" style={{width: `${(char.baseStats.str/20)*100}%`}}></div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-between text-sm text-gray-500 bg-gray-900 p-2 rounded">
-                                                    <span>Armor</span>
-                                                    <div className="w-24 h-4 bg-gray-700 rounded overflow-hidden">
-                                                        <div className="h-full bg-gray-500" style={{width: `${(char.baseStats.def/10)*100}%`}}></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <button onClick={() => setView('MENU')} className="mt-8 text-gray-500 hover:text-white transition-colors">Back to Menu</button>
-                        </div>
-                    )}
-
-                    {view === 'BATTLE' && hero && (
-                        <div className="h-screen w-full flex flex-col bg-gray-900 relative">
-                            <div className="bg-gray-800 p-2 flex justify-between items-center border-b border-gray-700 z-10 shadow-md">
-                                <div className="flex items-center gap-3">
-                                    <button onClick={goHome} className="text-gray-400 hover:text-white text-xs border border-gray-600 px-2 py-1 rounded">🏠 Home</button>
-                                    <span className="text-yellow-500 font-bold text-xl ml-2">Lvl {level}</span>
-                                    <span className="bg-gray-700 px-2 py-1 rounded text-sm text-gray-300">{hero.stages.slice().reverse().find(s => level >= s.minLvl)?.title}</span>
-                                </div>
-                                <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block text-gray-500 text-xs">ARROWS: Move | SPACE: Attack</div>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-40 flex flex-col items-end">
-                                        <div className="text-xs text-gray-400 mb-1">{playerStats.hp} / {playerStats.maxHp} HP</div>
-                                        <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-red-500 transition-all duration-300" style={{width: `${(playerStats.hp/playerStats.maxHp)*100}%`}}></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-hidden relative">
-                                <BattleCanvas 
-                                    heroData={hero} 
-                                    level={level} 
-                                    stats={playerStats} 
-                                    setStats={setPlayerStats} 
-                                    onVictory={handleVictory} 
-                                    onGameOver={handleGameOver} 
-                                    setBattleLog={setBattleLog} 
-                                    isPaused={isPortrait} 
-                                />
-                                <div className="absolute top-4 left-4 w-64 h-32 pointer-events-none overflow-hidden flex flex-col justify-end">
-                                    {battleLog.slice(-5).map((log, i) => (
-                                        <div key={i} className={`text-sm shadow-black drop-shadow-md font-bold ${log.type === 'good' ? 'text-green-400' : 'text-white'}`}>{log.msg}</div>
-                                    ))}
-                                </div>
+                            {/* Action Buttons */}
+                            <div className="flex gap-4 items-end">
+                                <button 
+                                    className="w-16 h-16 bg-yellow-600/50 rounded-full border-4 border-yellow-400 active:bg-yellow-600 active:scale-95 transition-transform flex items-center justify-center"
+                                    onTouchStart={handleTouchStart('special')} onTouchEnd={handleTouchEnd('special')}
+                                >
+                                    <span className="text-xl">⚡</span>
+                                </button>
+                                <button 
+                                    className="w-24 h-24 bg-red-600/50 rounded-full border-4 border-red-400 active:bg-red-600 active:scale-95 transition-transform flex items-center justify-center"
+                                    onTouchStart={handleTouchStart('attack')} onTouchEnd={handleTouchEnd('attack')}
+                                >
+                                    <span className="text-3xl">⚔️</span>
+                                </button>
                             </div>
                         </div>
-                    )}
-
-                    {view === 'VICTORY' && currentRunStats && (
-                        <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 p-6 text-center animate-fade-in relative">
-                            <div className="absolute inset-0 bg-gradient-to-b from-green-900/20 to-gray-900"></div>
-                            <div className="text-8xl mb-4 animate-bounce">🕉️</div>
-                            <h2 className="text-5xl font-extrabold text-yellow-500 mb-2 filter drop-shadow-lg">VICTORY!</h2>
-                            <div className="my-6 z-10">
-                                <AchievementBadge hero={hero} level={currentRunStats.level} stars={currentRunStats.stars} score={currentRunStats.score} date={currentRunStats.date} />
-                            </div>
-                            <div className="flex flex-col gap-3 w-full max-w-sm z-10">
-                                <div className="flex gap-2">
-                                     <button onClick={replayLevel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500">↺ Replay</button>
-                                    <button onClick={goHome} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg border border-gray-500">🏠 Menu</button>
-                                </div>
-                                <button onClick={nextLevel} className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg text-xl shadow-lg transform transition hover:scale-105">Start Level {level + 1}</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {view === 'GAMEOVER' && (
-                        <div className="h-screen w-full flex flex-col items-center justify-center bg-black p-6 text-center">
-                            <div className="text-8xl mb-6 text-red-600 animate-pulse">💀</div>
-                            <h2 className="text-5xl font-bold text-red-500 mb-2">DEFEATED</h2>
-                            <p className="text-gray-400 mb-8 text-xl">Your journey ends here... for now.</p>
-                            <div className="flex flex-col gap-3 w-full max-w-sm">
-                                <button onClick={replayLevel} className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-12 rounded-lg text-lg">Try Again</button>
-                                <button onClick={goHome} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-12 rounded-lg text-lg border border-gray-600">Return to Menu</button>
-                            </div>
-                        </div>
-                    )}
+                    </div>
                 </div>
             );
         };
