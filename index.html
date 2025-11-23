@@ -52,6 +52,13 @@
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
+
+        /* Mobile Optimization Styles */
+        .touch-control {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +112,19 @@
             { name: 'Sorcerer', icon: '🧙‍♂️', baseHp: 110, baseDmg: 25, baseDef: 4, xp: 100, speed: 2, color: '#3b82f6' },
             { name: 'Mahabali', icon: '🐲', baseHp: 350, baseDmg: 40, baseDef: 15, xp: 300, speed: 4, color: '#dc2626' }
         ];
+
+        // --- Helper Functions ---
+        const toggleFullScreen = () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        };
 
         // --- Components ---
 
@@ -422,25 +442,53 @@
             };
 
             return (
-                <div className="relative w-full h-full">
-                    <canvas 
-                        ref={canvasRef} 
-                        width={800} 
-                        height={400} 
-                        className="w-full h-full object-cover bg-gray-900 game-canvas rounded-lg shadow-2xl border border-gray-700"
-                    />
-                    <div className="absolute bottom-4 left-4 grid grid-cols-3 gap-1 opacity-60 md:hidden">
-                        <div></div>
-                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('up', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('up', false); }}>▲</button>
-                        <div></div>
-                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('left', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('left', false); }}>◀</button>
-                        <div className="w-12 h-12"></div>
-                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('right', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('right', false); }}>▶</button>
-                        <div></div>
-                        <button className="w-12 h-12 bg-gray-700 rounded-full text-white text-xl" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('down', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('down', false); }}>▼</button>
-                        <div></div>
+                <div className="relative w-full h-full flex items-center justify-center bg-gray-900 overflow-hidden">
+                    {/* Scalable Canvas Container */}
+                    <div className="relative w-full max-w-4xl aspect-[2/1] shadow-2xl border-2 border-gray-700 rounded-lg overflow-hidden">
+                        <canvas 
+                            ref={canvasRef} 
+                            width={800} 
+                            height={400} 
+                            className="w-full h-full object-contain game-canvas"
+                        />
+                        
+                        {/* Mobile Overlay Controls - Absolute to the screen viewport for easier thumb reach */}
+                        <div className="fixed bottom-6 left-6 grid grid-cols-3 gap-2 opacity-70 md:hidden z-50 touch-control">
+                            <div></div>
+                            <button 
+                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
+                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('up', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('up', false); }}
+                            >▲</button>
+                            <div></div>
+                            <button 
+                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
+                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('left', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('left', false); }}
+                            >◀</button>
+                            <div className="w-14 h-14"></div>
+                            <button 
+                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
+                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('right', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('right', false); }}
+                            >▶</button>
+                            <div></div>
+                            <button 
+                                className="w-14 h-14 bg-gray-800/80 rounded-full text-white text-2xl border border-gray-500 active:bg-gray-600"
+                                onTouchStart={(e) => { e.preventDefault(); handleMobileInput('down', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('down', false); }}
+                            >▼</button>
+                            <div></div>
+                        </div>
+
+                        <button 
+                            className="fixed bottom-10 right-10 w-24 h-24 bg-red-600/80 rounded-full border-4 border-red-800/50 text-white font-bold text-lg shadow-lg opacity-80 active:scale-95 transition-transform md:hidden z-50 touch-control"
+                            onTouchStart={(e) => { e.preventDefault(); handleMobileInput('shoot', true); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('shoot', false); }}
+                        >
+                            ATTACK
+                        </button>
                     </div>
-                    <button className="absolute bottom-8 right-8 w-20 h-20 bg-red-600 rounded-full border-4 border-red-800 text-white font-bold text-lg shadow-lg opacity-80 active:scale-95 transition-transform md:hidden" onTouchStart={(e) => { e.preventDefault(); handleMobileInput('shoot', true); }} onTouchEnd={(e) => { e.preventDefault(); handleMobileInput('shoot', false); }}>ATTACK</button>
                 </div>
             );
         };
@@ -475,6 +523,7 @@
             const [hero, setHero] = useState(null); 
             const [playerStats, setPlayerStats] = useState(null);
             const [level, setLevel] = useState(1);
+            const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
             const [currentRunStats, setCurrentRunStats] = useState(null);
             const [leaderboard, setLeaderboard] = useState([]);
             const [battleLog, setBattleLog] = useState([]);
@@ -482,6 +531,10 @@
             useEffect(() => {
                 const saved = localStorage.getItem('mahabharata_leaderboard');
                 if (saved) setLeaderboard(JSON.parse(saved));
+
+                const checkOrientation = () => setIsPortrait(window.innerHeight > window.innerWidth);
+                window.addEventListener('resize', checkOrientation);
+                return () => window.removeEventListener('resize', checkOrientation);
             }, []);
 
             const calculateStats = (charId, lvl) => {
@@ -559,6 +612,15 @@
 
             return (
                 <div className="min-h-screen bg-gray-900 text-white font-sans overflow-hidden select-none">
+                    
+                    {isPortrait && (
+                        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center text-center p-6 backdrop-blur-sm animate-fade-in">
+                            <div className="text-6xl mb-6 animate-pulse">📱🔄</div>
+                            <h2 className="text-2xl font-bold text-yellow-500 mb-2">Please Rotate Your Device</h2>
+                            <p className="text-gray-300 max-w-xs">The battlefield requires a wider view. Switch to Landscape mode for the best experience.</p>
+                        </div>
+                    )}
+
                     {view === 'MENU' && (
                         <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 p-6 text-center relative overflow-hidden">
                             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]"></div>
@@ -567,6 +629,7 @@
                             <div className="flex flex-col gap-4 z-10 w-full max-w-xs">
                                 <button onClick={() => setView('SELECT')} className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 px-8 rounded-lg text-xl shadow-2xl transform transition hover:scale-105 border border-yellow-400">Enter Battle</button>
                                 <button onClick={() => setView('LEADERBOARD')} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg text-lg border border-gray-600">Leaderboard</button>
+                                <button onClick={toggleFullScreen} className="text-sm text-gray-500 hover:text-gray-300 flex items-center justify-center gap-1 mt-2"><span>⛶</span> Go Fullscreen</button>
                             </div>
                         </div>
                     )}
@@ -659,7 +722,16 @@
                                 </div>
                             </div>
                             <div className="flex-1 overflow-hidden relative">
-                                <BattleCanvas heroData={hero} level={level} stats={playerStats} setStats={setPlayerStats} onVictory={handleVictory} onGameOver={handleGameOver} setBattleLog={setBattleLog} isPaused={false} />
+                                <BattleCanvas 
+                                    heroData={hero} 
+                                    level={level} 
+                                    stats={playerStats} 
+                                    setStats={setPlayerStats} 
+                                    onVictory={handleVictory} 
+                                    onGameOver={handleGameOver} 
+                                    setBattleLog={setBattleLog} 
+                                    isPaused={isPortrait} 
+                                />
                                 <div className="absolute top-4 left-4 w-64 h-32 pointer-events-none overflow-hidden flex flex-col justify-end">
                                     {battleLog.slice(-5).map((log, i) => (
                                         <div key={i} className={`text-sm shadow-black drop-shadow-md font-bold ${log.type === 'good' ? 'text-green-400' : 'text-white'}`}>{log.msg}</div>
